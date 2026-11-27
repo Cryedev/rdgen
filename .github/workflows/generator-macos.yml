@@ -354,11 +354,17 @@ jobs:
           cp ./res/icon.png ./flutter/assets/icon.png
           cp ./res/icon.png ./rustdesk/data/flutter_assets/assets/icon.png
           
-          # Convert PNG to SVG using potrace
-          magick ./res/icon.png -flatten ./temp_icon.pbm
-          potrace --svg -o ./flutter/assets/icon.svg ./temp_icon.pbm
+          # icon.svg is the icon, 256 px at most, inside an <svg><image>: it keeps its colours and is
+          # built the same way on every platform, whatever SVG delegate ImageMagick has (a potrace
+          # trace is black and white).
+          magick ./res/icon.png -resize '256x256>' ./icon-256.png
+          {
+            printf '%s' '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="256" height="256" viewBox="0 0 256 256"><image width="256" height="256" xlink:href="data:image/png;base64,'
+            base64 < ./icon-256.png | tr -d '\r\n'
+            printf '%s\n' '"/></svg>'
+          } > ./flutter/assets/icon.svg
+          rm -f ./icon-256.png
           cp ./flutter/assets/icon.svg ./rustdesk/data/flutter_assets/assets/icon.svg
-          rm ./temp_icon.pbm
           
           # Create macOS app icons
           magick ./res/icon.png -resize 16x16 "flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_16.png"
@@ -592,11 +598,16 @@ jobs:
           if [ -f "$ASSETS_DIR/icon.svg" ]; then
             mv "$ASSETS_DIR/icon.svg" "$ASSETS_DIR/icon.svg.bak"
           fi
-          # First convert PNG to PBM (bitmap)
-          magick convert ./res/icon.png ./temp_icon.pbm
-          # Then use potrace to convert to SVG
-          potrace --svg -o "$ASSETS_DIR/icon.svg" ./temp_icon.pbm
-          rm ./temp_icon.pbm
+          # icon.svg is the icon, 256 px at most, inside an <svg><image>: it keeps its colours and is
+          # built the same way on every platform, whatever SVG delegate ImageMagick has (a potrace
+          # trace is black and white).
+          magick ./res/icon.png -resize '256x256>' ./icon-256.png
+          {
+            printf '%s' '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="256" height="256" viewBox="0 0 256 256"><image width="256" height="256" xlink:href="data:image/png;base64,'
+            base64 < ./icon-256.png | tr -d '\r\n'
+            printf '%s\n' '"/></svg>'
+          } > "$ASSETS_DIR/icon.svg"
+          rm -f ./icon-256.png
 
       - name: logo handling
         if: ${{ env.logolink_url != 'false' }}

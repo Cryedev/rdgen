@@ -500,9 +500,19 @@ jobs:
       - name: icon stuff
         if: ${{ env.iconlink_url != 'false' }}
         continue-on-error: true
+        shell: bash
         run: |
           mv ./rustdesk/data/flutter_assets/assets/icon.svg ./rustdesk/data/flutter_assets/assets/icon.svg.bak
-          magick ./res/icon.png ./rustdesk/data/flutter_assets/assets/icon.svg
+          # icon.svg is the icon, 256 px at most, inside an <svg><image>: it keeps its colours and is
+          # built the same way on every platform, whatever SVG delegate ImageMagick has (a potrace
+          # trace is black and white).
+          magick ./res/icon.png -resize '256x256>' ./icon-256.png
+          {
+            printf '%s' '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="256" height="256" viewBox="0 0 256 256"><image width="256" height="256" xlink:href="data:image/png;base64,'
+            base64 < ./icon-256.png | tr -d '\r\n'
+            printf '%s\n' '"/></svg>'
+          } > ./rustdesk/data/flutter_assets/assets/icon.svg
+          rm -f ./icon-256.png
 
       - name: logo stuff
         if: ${{ env.logolink_url != 'false' }}
