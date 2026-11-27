@@ -4,6 +4,7 @@ import re
 from django.http import JsonResponse
 from django.conf import settings as _settings
 from .views import generate_custom_client, _get_run_status, _UUID_RE
+from .images import IMAGE_KINDS, ImageValidationError, normalize_png
 
 
 # Field validation constraints (mirrored from GenerateForm)
@@ -100,10 +101,29 @@ def validate_generate_params(data):
                 '(& \\ | \' " $ `, newlines).'
             )
 
-    # File fields are not used in API mode (base64 fields are used instead)
-    cleaned['iconfile'] = None
-    cleaned['logofile'] = None
-    cleaned['privacyfile'] = None
+    # Images arrive as base64 strings or data URLs under iconbase64/logobase64/
+    # privacybase64, or -- in a configuration saved from the web form -- under
+    # iconfile/logofile/privacyfile. They are validated here so a bad image
+    # fails the request instead of silently building with the default one.
+    for kind, (file_field, b64_field, _name, _label, _square) in IMAGE_KINDS.items():
+        value = cleaned.get(b64_field)
+        field = b64_field
+        if value in (None, ''):
+            value = data.get(file_field)
+            field = file_field
+        cleaned[file_field] = None
+        cleaned[b64_field] = ''
+        if value in (None, ''):
+            continue
+        if not isinstance(value, str):
+            errors[field] = 'Must be a base64 string or data URL.'
+            continue
+        try:
+            png = normalize_png(value, kind)
+        except ImageValidationError as e:
+            errors[field] = str(e)
+            continue
+        cleaned[file_field] = png
 
     return cleaned, errors
 

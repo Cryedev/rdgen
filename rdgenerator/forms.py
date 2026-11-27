@@ -1,7 +1,8 @@
 import re
 
 from django import forms
-from PIL import Image
+
+from .images import IMAGE_KINDS, ImageValidationError, normalize_png
 
 # App/company names are interpolated into single/double-quoted bash sed
 # scripts in every generator workflow: & \ | corrupt the substitution
@@ -93,30 +94,21 @@ class GenerateForm(forms.Form):
     xOffline = forms.BooleanField(initial=False, required=False)
     removeNewVersionNotif = forms.BooleanField(initial=False, required=False)
 
-    def clean_iconfile(self):
-        print("checking icon")
-        image = self.cleaned_data['iconfile']
-        if image:
+    def clean(self):
+        cleaned = super().clean()
+        # The upload wins over the base64 copy a loaded configuration puts in
+        # the hidden field. Errors for either are shown on the upload field,
+        # since the hidden fields are not rendered with errors.
+        for kind, (file_field, b64_field, _name, _label, _square) in IMAGE_KINDS.items():
+            value = cleaned.get(file_field) or cleaned.get(b64_field)
             try:
-                # Open the image using Pillow
-                img = Image.open(image)
-
-                # Check if the image is a PNG (optional, but good practice)
-                if img.format != 'PNG':
-                    raise forms.ValidationError("Only PNG images are allowed.")
-
-                # Get image dimensions
-                width, height = img.size
-
-                # Check for square dimensions
-                if width != height:
-                    raise forms.ValidationError("Custom App Icon dimensions must be square.")
-                
-                return image
-            except OSError:  # Handle cases where the uploaded file is not a valid image
-                raise forms.ValidationError("Invalid icon file.")
-            except Exception as e: # Catch any other image processing errors
-                raise forms.ValidationError(f"Error processing icon: {e}")
+                png = normalize_png(value, kind)
+            except ImageValidationError as e:
+                self.add_error(file_field, str(e))
+                continue
+            cleaned[file_field] = png
+            cleaned[b64_field] = ''
+        return cleaned
 
     def _reject_unsafe_name_chars(self, field):
         value = self.cleaned_data.get(field, '')
